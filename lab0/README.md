@@ -1,6 +1,6 @@
 # A Kernel Seedling
 
-This repository contains a Loadable Kernel Module (LKM) for Linux that creates a virtual file at `/proc/count`. When read, this file dynamically calculates and outputs the current number of running processes (tasks) on the system by iterating through the kernel's internal process list.
+This repository contains a Loadable Kernel Module (LKM) for Linux that creates a virtual file at `/proc/count`. When read, this file dynamically calculates and outputs the current number of running processes on the system by iterating through the kernel's internal process list.
 
 ## Building
 
@@ -15,7 +15,8 @@ sudo insmod proc_count.ko
 cat /proc/count
 ```
 
-Results: 139
+Results: 135
+(Note: I ran multiple tests and this is what the number always settles to, but when usually when I first start running the program - it kind of fluctuates between 135-140. I don't think that this is an issue with my code, but rather a sign of how /proc is a "dynamic" filesystem.)
 
 ## Cleaning Up
 
@@ -48,4 +49,3 @@ uname -r -s -v
 ```
 
 Linux 5.14.8-arch1-1 #1 SMP PREEMPT Sun, 26 Sep 2021 19:36:15 +0000
-
