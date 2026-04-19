@@ -27,6 +27,7 @@ int main(int argc, char *argv[]) {
     if (pid == -1)
       exit(errno);
 
+    // Child
     if (pid == 0) {
       if (in_fd != STDIN_FILENO) {
         if (dup2(in_fd, STDIN_FILENO) == -1)
@@ -43,9 +44,10 @@ int main(int argc, char *argv[]) {
 
       execlp(argv[i], argv[i], (char *)NULL);
 
+      perror("Execution Failed");
       errno = EINVAL;
       exit(errno);
-    } else {
+    } else { // Parent
       pids[i] = pid;
 
       if (in_fd != STDIN_FILENO)
@@ -58,8 +60,15 @@ int main(int argc, char *argv[]) {
     }
   }
 
-  for (int i = 1; i < argc; i++)
-    waitpid(pids[i], NULL, 0);
+  int final_status = 0;
 
-  return 0;
+  for (int i = 1; i < argc; i++) {
+    int status;
+    waitpid(pids[i], &status, 0);
+
+    if (WIFEXITED(status) && WEXITSTATUS(status) != 0)
+      final_status = WEXITSTATUS(status);
+  }
+
+  return final_status;
 }
