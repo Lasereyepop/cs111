@@ -20,10 +20,9 @@ struct process {
   TAILQ_ENTRY(process) pointers;
 
   /* Additional fields here */
-  /* End of "Additional fields here" */
-
   u32 remaining_time;
   bool started;
+  /* End of "Additional fields here" */
 };
 
 TAILQ_HEAD(process_list, process);
@@ -138,6 +137,22 @@ int main(int argc, char *argv[]) {
   u32 total_response_time = 0;
 
   /* Your code here */
+  for (u32 i = 0; i < size; i++) {
+    for (u32 j = i + 1; j < size; j++) {
+      bool should_swap = false;
+      if (data[j].arrival_time < data[i].arrival_time) {
+        should_swap = true;
+      } else if (data[j].arrival_time == data[i].arrival_time &&
+                 data[j].pid < data[i].pid) {
+        should_swap = true;
+      }
+      if (should_swap) {
+        struct process temp = data[i];
+        data[i] = data[j];
+        data[j] = temp;
+      }
+    }
+  }
   for (u32 i = 0; i < size; i++) {
     data[i].remaining_time = data[i].burst_time;
     data[i].started = false;
