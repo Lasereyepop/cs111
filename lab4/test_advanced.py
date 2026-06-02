@@ -1,5 +1,6 @@
 import os
 import stat
+import struct
 import subprocess
 import unittest
 
@@ -22,6 +23,10 @@ class Lab4AdvancedTestCase(unittest.TestCase):
             ["fsck.ext2", "-f", "-n", "cs111-base.img"], capture_output=True, text=True
         )
         cls.fsck_lines = p_fsck.stdout
+
+        # Read raw image for bitmap/structural tests
+        with open("cs111-base.img", "rb") as f:
+            cls.img = f.read()
 
         # Mount the filesystem
         subprocess.run(["mkdir", "-p", "mnt"], capture_output=True)
@@ -136,6 +141,91 @@ class Lab4AdvancedTestCase(unittest.TestCase):
             "hello-world",
             "hello symlink does not point to hello-world.",
         )
+
+
+    def test_block_bitmap(self):
+        """Blocks 0-23 used, 24-1023 free, bits 1024-8191 marked used."""
+        BLOCK_SIZE = 1024
+        bitmap = self.img[3 * BLOCK_SIZE : 4 * BLOCK_SIZE]
+        for i in range(24):
+            self.assertTrue(
+                (bitmap[i // 8] >> (i % 8)) & 1,
+                f"Block {i} should be marked used.",
+            )
+        for i in range(24, 1024):
+            self.assertFalse(
+                (bitmap[i // 8] >> (i % 8)) & 1,
+                f"Block {i} should be marked free.",
+            )
+        for i in range(1024, BLOCK_SIZE * 8):
+            self.assertTrue(
+                (bitmap[i // 8] >> (i % 8)) & 1,
+                f"Bit {i} (past end) should be marked used.",
+            )
+
+    def test_inode_bitmap(self):
+        """Inodes 1-13 used, 14-128 free, bits 129-1024 marked used."""
+        BLOCK_SIZE = 1024
+        bitmap = self.img[4 * BLOCK_SIZE : 5 * BLOCK_SIZE]
+        for i in range(13):
+            self.assertTrue(
+                (bitmap[i // 8] >> (i % 8)) & 1,
+                f"Inode {i + 1} should be marked used.",
+            )
+        for i in range(13, 128):
+            self.assertFalse(
+                (bitmap[i // 8] >> (i % 8)) & 1,
+                f"Inode {i + 1} should be marked free.",
+            )
+        for i in range(128, BLOCK_SIZE * 8):
+            self.assertTrue(
+                (bitmap[i // 8] >> (i % 8)) & 1,
+                f"Bit {i} (past end) should be marked used.",
+            )
+
+    def test_root_dir_block_fills_1024_bytes(self):
+        """All directory entries in the root dir block must sum to exactly 1024 bytes."""
+        BLOCK_SIZE = 1024
+        block = self.img[21 * BLOCK_SIZE : 22 * BLOCK_SIZE]
+        offset = 0
+        total = 0
+        while offset < BLOCK_SIZE:
+            rec_len = struct.unpack_from("<H", block, offset + 4)[0]
+            self.assertGreater(rec_len, 0, "rec_len must be > 0")
+            total += rec_len
+            offset += rec_len
+        self.assertEqual(total, BLOCK_SIZE, "Root dir entries must fill exactly 1024 bytes.")
+
+    def test_lost_and_found_block_fills_1024_bytes(self):
+        """All directory entries in the lost+found block must sum to exactly 1024 bytes."""
+        BLOCK_SIZE = 1024
+        block = self.img[22 * BLOCK_SIZE : 23 * BLOCK_SIZE]
+        offset = 0
+        total = 0
+        while offset < BLOCK_SIZE:
+            rec_len = struct.unpack_from("<H", block, offset + 4)[0]
+            self.assertGreater(rec_len, 0, "rec_len must be > 0")
+            total += rec_len
+            offset += rec_len
+        self.assertEqual(total, BLOCK_SIZE, "lost+found entries must fill exactly 1024 bytes.")
+
+    def test_root_dotdot_points_to_root(self):
+        """The '..' entry in the root directory must point to inode 2 (root itself)."""
+        BLOCK_SIZE = 1024
+        block = self.img[21 * BLOCK_SIZE : 22 * BLOCK_SIZE]
+        # skip '.' entry
+        rec_len_dot = struct.unpack_from("<H", block, 4)[0]
+        dotdot_inode = struct.unpack_from("<I", block, rec_len_dot)[0]
+        self.assertEqual(dotdot_inode, 2, "'..' in root dir must point to inode 2.")
+
+    def test_root_inode_links_count(self):
+        """Root inode (inode 2) must have i_links_count == 3."""
+        BLOCK_SIZE = 1024
+        INODE_SIZE = 128
+        inode_table_offset = 5 * BLOCK_SIZE
+        root_inode_offset = inode_table_offset + (2 - 1) * INODE_SIZE
+        links_count = struct.unpack_from("<H", self.img, root_inode_offset + 26)[0]
+        self.assertEqual(links_count, 3, "Root inode i_links_count should be 3.")
 
 
 if __name__ == "__main__":
